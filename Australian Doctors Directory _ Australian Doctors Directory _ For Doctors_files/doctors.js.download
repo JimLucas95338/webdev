@@ -1,0 +1,270 @@
+$.ajaxSetup ({
+    // Disable caching of AJAX responses
+    cache: false
+});
+
+var app = {
+    URL: {
+        //base:   'C:/wamp/www/'+app.Workspace.directory,
+        path:   '',
+        web:    '',
+        upload: '/uploads'
+    }
+};
+
+$.fn.suggest = function(options){
+    var Suggest = this;
+
+    this.onKeyUp = function(e) {
+        var code = getKeyCode(e);
+
+        for (var k in keys) {
+            if (code === keys[k]) return false;
+        }
+
+        typedValue = $suggestor.val();
+
+        if (!typedValue.length) {
+            Suggest.clear();
+            return false;
+        }
+
+        $.getJSON(app.URL.path+options.URL+'?'+options.parameterName+'='+typedValue, function(j) {
+            if(j.length) {
+                data = j;
+                $suggestions.html('<ul></ul>');
+
+                for (var d in j) {
+                    $suggestions.find('ul').append('<li>'+j[d].html+'</li>');
+                }
+            } else {
+                Suggest.clear();
+            }
+        });
+    }
+
+    this.onKeyDown = function(e) {
+        var code = getKeyCode(e);
+
+        if ($suggestions.length) {
+            switch (code) {
+                case keys.UP:
+                    scroll('up');
+                    break;
+                case keys.DOWN:
+                    scroll('down');
+                    break;
+                case keys.TAB:
+                    if($suggestions.find('.'+options.hoverClass).length) {
+                        complete(getSuggestion());
+                    }
+                    Suggest.clear();
+                    break;
+                case keys.RETURN:
+                    if($suggestions.find('.'+options.hoverClass).length) {
+                        e.preventDefault();
+                        complete(getSuggestion());
+                        Suggest.clear();
+                    }
+                    break;
+                case keys.ESC:
+                    Suggest.clear();
+                    break;
+            }
+        }
+    }
+
+    this.onSelect = function(text) {
+
+        complete(text);
+        Suggest.clear();
+
+    }
+
+    var getKeyCode = function(e) {
+        return e.keyCode ? e.keyCode : e.which;
+    }
+
+    this.clear = function() {
+        $suggestions.html('');
+        indice = -1;
+    }
+
+    var complete = function(text) {
+        $suggestor.val(text);
+
+        if(typeof options.onComplete === 'function') {
+            options.onComplete.call(this, text, data);
+        }
+    }
+
+    var getSuggestion = function() {
+        return $suggestions.find('.'+options.hoverClass).html();
+    }
+
+    var scroll = function(dir) {
+        var suggestionCount = data.length;
+
+        $suggestions.find('.' + options.hoverClass).removeClass(options.hoverClass);
+
+        if(dir === 'down') {
+            indice = (indice + 1) < suggestionCount ?  indice + 1 : -1;
+        } else {
+            indice = indice < 0 ? suggestionCount - 1 : ((indice - 1) < 0 ? -1 : indice - 1);
+        }
+
+        if(indice < 0) {
+            complete(typedValue);
+        } else {
+            var $listItem = $suggestions.find('li:eq(' + indice + ')').addClass(options.hoverClass);
+            complete($listItem.html());
+        }
+    }
+
+    var init = function() {
+        $('body').click(function() {
+            Suggest.clear();
+        });
+
+        $suggestions.delegate('li', 'click', function(e) {
+            e.stopPropagation();
+            Suggest.onSelect(this.innerHTML);
+        });
+
+        $suggestor.keyup(function(e) {
+            Suggest.onKeyUp(e);
+        });
+
+        $suggestor.keydown(function(e) {
+            Suggest.onKeyDown(e);
+        });
+
+        return this;
+    }
+
+    var keys = {
+        RETURN:     13,
+        ESC:        27,
+        TAB:        9,
+        UP:         38,
+        DOWN:       40
+    };
+
+    var data = null;
+    var indice = -1;
+    var $suggestor = $(this);
+    var $suggestions = $(options.target);
+    var typedValue = null;
+
+    var defaults = {
+        target: '#suggestions',
+        hoverClass: 'active',
+        data: {}
+    };
+
+    options = $.extend({}, defaults, options);
+
+    return this.each(function(){
+        init();
+    });
+}
+
+$.dropselect = function(el, options){
+    var base = this;
+    var count = 0;
+
+    base.$el = $(el);
+    base.el = el;
+
+    // Add a reverse reference to the DOM object
+    base.$el.data("dropselect", base);
+
+    base.init = function(){
+        base.options = $.extend({},$.dropselect.defaults, options);
+        base.initEventListeners();
+
+        return base;
+    };
+
+    base.initEventListeners = function() {
+        var $descriptorEl = base.$el.find('p');
+
+        $descriptorEl.click(function() {
+            $(this).siblings('ul').show();
+        });
+
+        base.$el.find('.reset').click(function() {
+            base.reset();
+        });
+
+        base.$el.click(function(e) {
+            e.stopPropagation();
+        });
+
+        $('body').click(function(e) {
+            base.$el.find('ul').hide();
+        });
+
+        base.$el.find('input:checkbox').click(function(){
+            if (base.$el.find('input:checked').length) {
+                $descriptorEl.html('Multiple');
+            } else {
+                base.reset();
+            }
+        });
+    }
+
+    base.reset = function() {
+        base.$el.find('input:checkbox').attr('checked', '');
+        base.$el.find('p').html('All');
+    }
+
+    base.init();
+}
+
+$.dropselect.defaults = {
+};
+
+$.fn.dropselect = function(options){
+    return this.each(function(){
+        (new $.dropselect(this, options));
+    });
+};
+
+var Dropdown = {
+    init: function(elem, options) {
+        this.options = $.extend({},this.options,options);
+
+        this.elem = elem;
+        this.$elem = $(elem);
+        this.dropElem = null;
+
+        $(elem).click(function() {
+            $('.dropdown').hide();
+            $(this).addClass('active');
+            this.dropElem = $(this).attr('href');
+            Dropdown.toggle(this.dropElem);
+            Dropdown.initEventListeners();
+            return false;
+        });
+
+        return this;
+    },
+
+    initEventListeners: function() {
+        $('body').click(function() {
+            $('.dropdown').hide();
+            Dropdown.$elem.removeClass('active');
+        });
+
+        $('.dropdown').click(function(event){
+            event.stopPropagation();
+        });
+    },
+
+    options: { },
+
+    toggle: function(elem) {
+       if($(elem).is(':hidden')) $(elem).show();
+    }
+}
